@@ -13,12 +13,11 @@ from keras.datasets import cifar10
 from keras.utils.np_utils import to_categorical
 from keras import metrics
 from keras.optimizers import SGD,RMSprop,Adam
-from keras.callbacks import EarlyStopping
+from keras.callbacks import EarlyStopping, ModelCheckpoint, TensorBoard
 from keras.backend.tensorflow_backend import set_session
 import tensorflow as tf
 import numpy as np
-import matplotlib
-matplotlib.use('agg')
+import os, time, datetime
 import matplotlib.pyplot as plt
 
 config = tf.ConfigProto()
@@ -28,51 +27,51 @@ set_session(tf.Session(config=config))
 #define the Sequential model
 class CNNNet:
 
-    @staticmethod
-    def createNet(input_shapes,nb_class):
+	@staticmethod
+	def createNet(input_shapes,nb_class):
 
-        feature_layers = [
-                
-        BatchNormalization(input_shape=input_shapes),
-        Conv2D(64,(3,3),padding="same"),
-        Activation("relu"),
-        BatchNormalization(),
-        Conv2D(64,(3,3),padding="same"),
-        Activation("relu"),
-        MaxPooling2D(pool_size=(2,2),strides=(2,2)),
-        
-        BatchNormalization(),
-        Conv2D(128,(3,3),padding="same"),
-        Activation("relu"),
-        BatchNormalization(),
-        Dropout(0.5),
-        Conv2D(128,(3,3),padding="same"),
-        Activation("relu"),
-        MaxPooling2D(pool_size=(2,2),strides=(2,2)),
-        
-        BatchNormalization(),
-        Dropout(0.5),
-        Conv2D(256,(3,3),padding="same"),
-        Activation("relu"),
-        Dropout(0.5),
-        Conv2D(256,(3,3),padding="same"),
-        Activation("relu"),
-        MaxPooling2D(pool_size=(2,2),strides=(2,2)),
-        BatchNormalization()
-        
-        ]
+		feature_layers = [
 
-        classification_layer=[
-        Flatten(),
-        #Dense(512),
-        #Activation("relu"),
-        Dropout(0.5),
-        Dense(units=nb_class),
-        Activation("softmax")
-        ]
+		BatchNormalization(input_shape=input_shapes),
+		Conv2D(64,(3,3),padding="same", kernel_initializer='he_normal'),
+		Activation("relu"),
+		BatchNormalization(),
+		Conv2D(64,(3,3),padding="same", kernel_initializer='he_normal'),
+		Activation("relu"),
+		MaxPooling2D(pool_size=(2,2),strides=(2,2)),
 
-        model = Sequential(feature_layers+classification_layer)
-        return model
+		BatchNormalization(),
+		Conv2D(128,(3,3),padding="same", kernel_initializer='he_normal'),
+		Activation("relu"),
+		BatchNormalization(),
+		Dropout(0.5),
+		Conv2D(128,(3,3),padding="same", kernel_initializer='he_normal'),
+		Activation("relu"),
+		MaxPooling2D(pool_size=(2,2),strides=(2,2)),
+
+		BatchNormalization(),
+		Dropout(0.5),
+		Conv2D(256,(3,3),padding="same", kernel_initializer='he_normal'),
+		Activation("relu"),
+		Dropout(0.5),
+		Conv2D(256,(3,3),padding="same", kernel_initializer='he_normal'),
+		Activation("relu"),
+		MaxPooling2D(pool_size=(2,2),strides=(2,2)),
+		BatchNormalization()
+
+		]
+
+		classification_layer=[
+		Flatten(),
+		#Dense(512),
+		#Activation("relu"),
+		Dropout(0.5),
+		Dense(units=nb_class, kernel_initializer='he_normal'),
+		Activation("softmax")
+		]
+
+		model = Sequential(feature_layers+classification_layer)
+		return model
 
 #parameters
 NB_EPOCH = 40
@@ -116,20 +115,26 @@ Y_test = to_categorical(Y_test,NB_CLASSES)
 
 # init the optimizer and model
 model = CNNNet.createNet(input_shapes=(32,32,3),nb_class=NB_CLASSES)
+model.compile(loss="categorical_crossentropy",optimizer='adadelta',metrics=['accuracy'])
 model.summary()
-model.compile(loss="categorical_crossentropy",optimizer='adam',metrics=['acc'])
 
-early_stopping = EarlyStopping(monitor='val_loss', patience=2)
+start = time.time()
+log_dir = datetime.datetime.now().strftime('model_%Y%m%d_%H%M')
+os.mkdir(log_dir)
+es = EarlyStopping(monitor='val_acc', patience=20)
+mc = ModelCheckpoint(log_dir + '\\CIFAR10-EP{epoch:02d}-ACC{val_acc:.4f}.h5',
+						 monitor='val_acc', save_best_only=True)
+tb = TensorBoard(log_dir=log_dir, histogram_freq=1,  write_graph=True, write_images=False, embeddings_freq=0, embeddings_layer_names=None, embeddings_metadata=None)
 
 history = model.fit(X_train,Y_train,
-                batch_size = BATCH_SIZE,
-                epochs = NB_EPOCH,
-                verbose=VERBOSE,
-                validation_split=VALIDATION_SPLIT,
-                callbacks=[early_stopping]
-                )
+				batch_size = BATCH_SIZE,
+				epochs = NB_EPOCH,
+				verbose=VERBOSE,
+				validation_split=VALIDATION_SPLIT,
+				callbacks=[es, mc ,tb]
+				)
 
-score = model.evaluate(X_test,Y_test,verbose = VERBOSE)
+score = model.evaluate(X_test,Y_test,verbose=VERBOSE)
 print("")
 print("====================================")
 print("====================================")
@@ -139,7 +144,7 @@ print("====================================")
 print("====================================")
 
 #save model
-model.save("my_model"+str(score[1])+".h5")
+model.save("./CIFAR10_MODEL"+str(score[1])+".h5")
 
 #show the data in history
 print(history.history.keys())
@@ -157,9 +162,10 @@ plt.ylabel("accuracy")
 plt.xlabel("epoch")
 plt.legend()
 plt.grid(True)
-plt.savefig("Performance Accuracy:"+str(score[1])+".png")
+plt.savefig("PerformanceAccuracy_"+str(score[1])+".png")
 
 #summarize history for loss
+plt.figure(figsize=(17, 5))
 plt.subplot(121)
 plt.plot(range(epoch), loss, label='Train')
 plt.plot(range(epoch), val_loss, label='Test')
@@ -168,8 +174,7 @@ plt.ylabel("loss")
 plt.xlabel("epoch")
 plt.legend()
 plt.grid(True)
-
-plt.savefig("Performance Loss:"+str(score[1])+".png")
+plt.savefig("PerformanceLoss_"+str(score[1])+".png")
 plt.show()
 
 rand_id = np.random.choice(range(10000), size=10)

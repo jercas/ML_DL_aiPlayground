@@ -132,14 +132,13 @@ def train(X_train, X_test, y_train, y_test, model, epoch, batch, data_augmentati
 			model: trained learning model
 	"""
 	start = time.time()
-
 	log_dir = datetime.datetime.now().strftime('model_%Y%m%d_%H%M')
 	os.mkdir(log_dir)
 
 	es = EarlyStopping(monitor='val_acc', patience=20)
 	mc = ModelCheckpoint(log_dir + '\\CIFAR10-EP{epoch:02d}-ACC{val_acc:.4f}.h5',
 						 monitor='val_acc', save_best_only=True)
-	tb = TensorBoard(log_dir=log_dir, histogram_freq=0)
+	tb = TensorBoard(log_dir=log_dir, histogram_freq=1,  write_graph=True, write_images=False, embeddings_freq=0, embeddings_layer_names=None, embeddings_metadata=None)
 
 	if data_augmentation:
 		aug = ImageDataGenerator(width_shift_range=0.125, height_shift_range=0.125, horizontal_flip=True)
